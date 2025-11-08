@@ -1,0 +1,108 @@
+═══════════════════════════════════════════════════════════════
+🚀 RADIANT KIDS CHECK-IN DASHBOARD - QUICK START
+═══════════════════════════════════════════════════════════════
+
+📦 STEP 1: INSTALL DEPENDENCIES
+────────────────────────────────────────────────────────────────
+cd "/Users/valerieo/Documents/Cursor Apps/Radiant Kids Check-In"
+npm install
+
+⏱️ This will take 1-2 minutes...
+
+
+🔧 STEP 2: CONFIGURE ENVIRONMENT
+────────────────────────────────────────────────────────────────
+Copy the example file:
+cp .env.example .env.local
+
+Then edit .env.local:
+nano .env.local
+
+For testing (NO API CREDENTIALS NEEDED):
+----------------------------------------
+USE_MOCK_DATA=true
+PCO_CLIENT_ID=not_needed
+PCO_CLIENT_SECRET=not_needed
+
+For production (REQUIRES CREDENTIALS):
+---------------------------------------
+USE_MOCK_DATA=false
+PCO_CLIENT_ID=your_actual_client_id
+PCO_CLIENT_SECRET=your_actual_secret
+
+
+▶️ STEP 3: START THE SERVER
+────────────────────────────────────────────────────────────────
+npm run dev
+
+Open your browser to:
+👉 http://localhost:3000
+
+
+✅ WHAT YOU SHOULD SEE
+────────────────────────────────────────────────────────────────
+• A beautiful dashboard with check-ins
+• 12 sample children across 3 service times (in mock mode)
+• Auto-refreshing every 30 seconds
+• Large security codes
+• Medical notes highlighted in red
+
+
+📚 DOCUMENTATION FILES
+────────────────────────────────────────────────────────────────
+• README.md          - Full documentation
+• SETUP.md           - Detailed setup instructions
+• DEPLOYMENT.md      - How to deploy to production
+• PROJECT_SUMMARY.md - Technical overview
+
+
+🔑 GETTING PLANNING CENTER CREDENTIALS
+────────────────────────────────────────────────────────────────
+1. Go to: https://api.planningcenteronline.com/oauth/applications
+2. Log in to Planning Center
+3. Click "New Personal Access Token"
+4. Name it: "Radiant Kids Dashboard"
+5. Copy the Application ID → PCO_CLIENT_ID
+6. Copy the Secret → PCO_CLIENT_SECRET
+
+
+🚀 DEPLOYING TO VERCEL (RECOMMENDED)
+────────────────────────────────────────────────────────────────
+1. Push code to GitHub:
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git push
+
+2. Go to vercel.com
+3. Import your repository
+4. Add environment variables in Vercel dashboard
+5. Deploy!
+
+
+❓ TROUBLESHOOTING
+────────────────────────────────────────────────────────────────
+"Module not found":
+  rm -rf node_modules package-lock.json
+  npm install
+
+"Port 3000 already in use":
+  lsof -ti:3000 | xargs kill -9
+  npm run dev
+
+"API not returning data":
+  • Check .env.local exists
+  • Verify USE_MOCK_DATA is set
+  • Check credentials are correct
+
+
+📞 NEED HELP?
+────────────────────────────────────────────────────────────────
+Read the documentation files listed above.
+All questions are answered there!
+
+
+═══════════════════════════════════════════════════════════════
+🎉 READY TO GO! Run "npm install" then "npm run dev"
+═══════════════════════════════════════════════════════════════
+
