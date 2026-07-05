@@ -30,6 +30,12 @@ import Toast from '@/components/Toast';
 import Loader from '@/components/Loader';
 import SetupModal from '@/components/SetupModal';
 import AdminStats from '@/components/AdminStats';
+import RecentCheckoutsTray, { RecentCheckoutItem } from '@/components/RecentCheckoutsTray';
+import StatsBar from '@/components/StatsBar';
+import ServiceTimeFilterRow from '@/components/ServiceTimeFilterRow';
+
+const FILTER_SELECT_CLASS =
+  'w-full px-md py-xs rounded-pill border border-hairline font-text text-caption text-ink bg-canvas focus:outline-none focus:ring-2 focus:ring-primary-focus min-h-[36px] cursor-pointer';
 import { CheckInData, LOCATIONS } from '@/lib/mockData';
 import { UserProfile, loadUserProfile, Classroom } from '@/lib/userProfile';
 
@@ -93,19 +99,24 @@ export default function Home() {
   const [selectedLocation, setSelectedLocation] = useState<string>('All');
   const [selectedClassroom, setSelectedClassroom] = useState<string>('All');
   const [selectedServiceTime, setSelectedServiceTime] = useState<string>('All');
+  const [checkoutServiceTime, setCheckoutServiceTime] = useState<string>('All');
   const [refreshMode, setRefreshMode] = useState<'service' | 'off-hours'>('off-hours');
   const [toast, setToast] = useState<{ message: string; onUndo?: () => void } | null>(null);
   const [isPulling, setIsPulling] = useState<boolean>(false);
   const [filtersLoaded, setFiltersLoaded] = useState<boolean>(false);
+  const [recentCheckouts, setRecentCheckouts] = useState<RecentCheckoutItem[]>([]);
   
   // Hidden system reset (Easter egg)
   const [titleClickCount, setTitleClickCount] = useState<number>(0);
   const [showResetButton, setShowResetButton] = useState<boolean>(false);
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pruneRecentTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Refs for deduplication and visibility tracking
   const fetchInProgress = useRef<boolean>(false);
   const lastFetchTime = useRef<number>(0);
+  const failureCount = useRef<number>(0);
+  const lastErrorTime = useRef<number>(0);
   
   // Pull-to-refresh tracking
   const pullStartY = useRef<number>(0);
@@ -132,6 +143,73 @@ export default function Home() {
       setShowSetupModal(true);
     }
   }, []);
+
+  /**
+   * Load checkout service filter from localStorage
+   */
+  useEffect(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('checkoutServiceTime') : null;
+      if (saved) {
+        setCheckoutServiceTime(saved);
+      }
+    } catch (err) {
+      console.error('Error loading checkout service time:', err);
+    }
+  }, []);
+
+  /**
+   * Persist checkout service filter to localStorage
+   */
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('checkoutServiceTime', checkoutServiceTime);
+      }
+    } catch (err) {
+      console.error('Error saving checkout service time:', err);
+    }
+  }, [checkoutServiceTime]);
+
+  /**
+   * Clean up old roll-over records from localStorage on mount
+   * Roll-overs should only persist for the current service day
+   */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('rolloverRecords');
+      if (saved) {
+        const rollovers: CheckInData[] = JSON.parse(saved);
+        
+        // Get today's date at midnight (start of day) in local timezone
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStart = today.getTime();
+        
+        // Filter out roll-overs from previous days
+        const currentDayRollovers = rollovers.filter(rollover => {
+          if (rollover.rolloverTimestamp && rollover.rolloverTimestamp >= todayStart) {
+            return true; // Keep roll-overs from today
+          }
+          return false; // Remove roll-overs from previous days
+        });
+        
+        // If we removed any old roll-overs, update localStorage
+        if (currentDayRollovers.length < rollovers.length) {
+          const removedCount = rollovers.length - currentDayRollovers.length;
+          console.log(`🗑️  Cleaned up ${removedCount} old roll-over record(s) from previous days`);
+          
+          if (currentDayRollovers.length > 0) {
+            localStorage.setItem('rolloverRecords', JSON.stringify(currentDayRollovers));
+          } else {
+            localStorage.removeItem('rolloverRecords');
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error cleaning up old roll-over records:', err);
+    }
+  }, []); // Run once on mount
 
   /**
    * Load filter selections from localStorage
@@ -293,6 +371,21 @@ export default function Home() {
    * Prevents duplicate API calls if one is already in progress
    */
   const fetchCheckIns = useCallback(async (force: boolean = false) => {
+    // Avoid background polling when tab is hidden (WCAG-friendly: less noisy updates)
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && !force) {
+      return;
+    }
+
+    // Exponential backoff after errors
+    const nowTs = Date.now();
+    if (!force && failureCount.current > 0) {
+      const backoffMs = Math.min(30000, 2000 * Math.pow(2, failureCount.current - 1));
+      const sinceError = nowTs - lastErrorTime.current;
+      if (sinceError < backoffMs) {
+        return;
+      }
+    }
+
     // Deduplication: Don't fetch if already in progress
     if (fetchInProgress.current && !force) {
       console.log('⏭️  Skipping fetch - already in progress');
@@ -300,15 +393,14 @@ export default function Home() {
     }
     
     // Deduplication: Don't fetch if recently fetched (within 5 seconds)
-    const now = Date.now();
-    const timeSinceLastFetch = now - lastFetchTime.current;
+    const timeSinceLastFetch = nowTs - lastFetchTime.current;
     if (timeSinceLastFetch < 5000 && !force) {
       console.log('⏭️  Skipping fetch - fetched', Math.round(timeSinceLastFetch / 1000), 'seconds ago');
       return;
     }
     
     fetchInProgress.current = true;
-    lastFetchTime.current = now;
+    lastFetchTime.current = nowTs;
     
     try {
       const currentMode = isServiceTime() ? 'service' : 'off-hours';
@@ -320,6 +412,10 @@ export default function Home() {
       const result = await response.json();
       
       if (result.success) {
+        // Reset backoff on success
+        failureCount.current = 0;
+        lastErrorTime.current = 0;
+
         // Load saved checked-out state and merge with fresh data
         const savedState = loadCheckedOutState();
         let mergedData = (result.data || []).map((checkIn: CheckInData) => {
@@ -356,9 +452,22 @@ export default function Home() {
           // Create a map of existing check-in IDs from fresh data
           const existingIds = new Set(mergedData.map((c: CheckInData) => c.id));
           
+          // ⭐ CLEAR OLD ROLL-OVERS: Only keep roll-overs from today
+          // Get today's date at midnight (start of day) in local timezone
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todayStart = today.getTime();
+          
           // Only keep roll-over records that aren't already in the fresh data
           // (in case the child was actually registered for that service)
           const preservedRollovers = rolloverRecords.filter(rollover => {
+            // ⭐ CRITICAL: Filter out roll-overs from previous days
+            // Roll-over records should only persist for the current service day
+            if (rollover.rolloverTimestamp && rollover.rolloverTimestamp < todayStart) {
+              console.log(`🗑️  Removing old roll-over record for ${rollover.childName} (from ${new Date(rollover.rolloverTimestamp).toLocaleDateString()})`);
+              return false;
+            }
+            
             // Check if this roll-over is still valid (child not checked out, not no-show)
             const isStillActive = !rollover.checkedOut && rollover.status !== 'no-show';
             
@@ -386,9 +495,13 @@ export default function Home() {
         setLastUpdated(new Date());
         setError(null);
       } else {
+        failureCount.current += 1;
+        lastErrorTime.current = nowTs;
         setError(result.error || 'Failed to fetch check-ins');
       }
     } catch (err) {
+      failureCount.current += 1;
+      lastErrorTime.current = nowTs;
       console.error('Error fetching check-ins:', err);
       setError('Network error. Please check your connection.');
     } finally {
@@ -962,6 +1075,8 @@ export default function Home() {
       saveCheckedOutState(updated);
       return updated;
     });
+    // Remove from recent tray when undone
+    setRecentCheckouts(prev => prev.filter(item => item.securityCode !== securityCode));
     setToast(null); // Clear any existing toast
   }, [saveCheckedOutState]);
 
@@ -981,6 +1096,18 @@ export default function Home() {
       
       // Count unique services (for multi-service message)
       const uniqueServices = new Set(kidsToCheckOut.map(k => k.serviceName)).size;
+
+      // Track recent check-outs (for sticky tray)
+      const timestamp = new Date().toISOString();
+      if (kidsToCheckOut.length > 0) {
+        setRecentCheckouts(prev => {
+          const updated = [
+            { securityCode, kids: kidsToCheckOut, timestamp },
+            ...prev.filter(item => item.securityCode !== securityCode),
+          ].slice(0, 5);
+          return updated;
+        });
+      }
       
       // Check out ALL instances with this security code across all services
       const updated = prevCheckIns.map(checkIn => 
@@ -1081,6 +1208,44 @@ export default function Home() {
     // Return total minutes for easy comparison
     return hours * 60 + minutes;
   }, []);
+
+  /**
+   * Service time options for the checkout list (dynamic, based on checked-out items)
+   * Sorted from earliest to latest, with "All" prepended.
+   */
+  const checkoutServiceOptions = React.useMemo(() => {
+    const parseTime = (time: string): number => {
+      const match = time.match(/(\d{1,2}):(\d{2})\s?([AP]M)/i);
+      if (!match) return 0;
+      let hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const period = match[3].toUpperCase();
+      if (period === 'PM' && hours !== 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+
+    const times = checkIns
+      .filter(c => c.checkedOut)
+      .map(c => {
+        const match = c.serviceName?.match(/(\d{1,2}:\d{2}\s?[AP]M)/i);
+        return match ? match[1].toUpperCase() : c.serviceTime?.toUpperCase() || '';
+      })
+      .filter(Boolean);
+
+    const unique = Array.from(new Set(times));
+    unique.sort((a, b) => parseTime(a) - parseTime(b));
+    return ['All', ...unique];
+  }, [checkIns]);
+
+  /**
+   * Keep checkout filter valid when available service options change
+   */
+  useEffect(() => {
+    if (!checkoutServiceOptions.includes(checkoutServiceTime) && checkoutServiceTime !== 'All') {
+      setCheckoutServiceTime('All');
+    }
+  }, [checkoutServiceOptions, checkoutServiceTime]);
 
   /**
    * Handle dismiss (mark as no-show) for a family
@@ -1272,12 +1437,54 @@ export default function Home() {
 
   // Cleanup reset timer on unmount
   useEffect(() => {
+    // Auto-prune recent check-outs after 7 minutes
+    const MAX_AGE_MS = 7 * 60 * 1000;
+    pruneRecentTimerRef.current = setInterval(() => {
+      setRecentCheckouts(prev => {
+        const now = Date.now();
+        return prev.filter(item => now - new Date(item.timestamp).getTime() < MAX_AGE_MS);
+      });
+    }, 60 * 1000);
+
     return () => {
       if (resetTimerRef.current) {
         clearTimeout(resetTimerRef.current);
       }
+      if (pruneRecentTimerRef.current) {
+        clearInterval(pruneRecentTimerRef.current);
+      }
     };
   }, []);
+
+  const getActiveCountForServiceTime = useCallback(
+    (time: string) => {
+      if (checkIns.length === 0) return 0;
+      if (time === 'All') {
+        return checkIns.filter(
+          (c) =>
+            !c.checkedOut &&
+            c.status !== 'no-show' &&
+            (selectedLocation === 'All' || c.locationName === selectedLocation) &&
+            (selectedClassroom === 'All' || c.className === selectedClassroom)
+        ).length;
+      }
+      return checkIns.filter(
+        (c) =>
+          !c.checkedOut &&
+          c.status !== 'no-show' &&
+          c.serviceName.toUpperCase().includes(time) &&
+          (selectedLocation === 'All' || c.locationName === selectedLocation) &&
+          (selectedClassroom === 'All' || c.className === selectedClassroom)
+      ).length;
+    },
+    [checkIns, selectedLocation, selectedClassroom]
+  );
+
+  const statsBarItems = [
+    { label: 'Checked In', value: stats.checkedIn, accent: 'primary' as const, icon: 'checked-in' as const },
+    { label: 'Checked Out', value: stats.checkedOut, accent: 'muted' as const, icon: 'checked-out' as const },
+    { label: 'Total Kids', value: stats.total, accent: 'default' as const, icon: 'total' as const },
+  ];
 
   return (
     <>
@@ -1302,25 +1509,16 @@ export default function Home() {
         />
       )}
 
-      <main 
-        className="min-h-screen p-4 sm:p-6 md:p-8 lg:p-12 bg-gradient-to-br from-gray-50 via-blue-50/20 to-gray-50 relative"
+      <main
+        className="min-h-screen bg-canvas-parchment relative"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Subtle branded background element */}
-        <div className="fixed inset-0 opacity-[0.03] pointer-events-none z-0">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-[20rem] font-bold text-gray-400 select-none" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-              RK
-            </div>
-          </div>
-        </div>
-
         {/* Pull-to-refresh indicator */}
         {isPulling && (
-          <div className="fixed top-0 left-0 right-0 flex justify-center pt-4 z-40">
-            <div className="bg-blue-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
+          <div className="fixed top-0 left-0 right-0 flex justify-center pt-lg z-40">
+            <div className="btn-primary flex items-center gap-xs animate-pulse">
               <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -1329,26 +1527,31 @@ export default function Home() {
             </div>
           </div>
         )}
-        
-        <div className="max-w-7xl mx-auto relative z-10">
-          {/* Header */}
-          <header className="mb-4">
-            <div className="bg-white rounded-lg shadow-lg p-3 sm:p-4 md:p-5">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-3 md:space-y-0">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h1 
-                      className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-1 cursor-pointer select-none"
-                      onClick={handleTitleClick}
+
+        <div className="max-w-content mx-auto relative z-10">
+          {/* Global nav */}
+          <header className="global-nav flex items-center justify-between sticky top-0 z-30">
+            <span className="font-text text-nav-link text-on-dark tracking-tight">Radiant Kids</span>
+            <span className="font-text text-fine-print text-body-muted hidden sm:inline">Check-In Dashboard</span>
+          </header>
+
+          {/* Sub-nav + page title */}
+          <div className="sub-nav-frosted mb-lg">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-md">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-sm flex-wrap">
+                    <h1
+                    className="font-display text-display-md text-ink cursor-pointer select-none"
+                    onClick={handleTitleClick}
+                  >
+                    Check-In
+                  </h1>
+                  {showResetButton && (
+                    <button
+                      onClick={handleSystemReset}
+                      className="btn-dark-utility !bg-red-700 animate-scale-in flex items-center gap-xs"
+                      title="Clear all cached data and reload"
                     >
-                      Radiant Kids Check-In
-                    </h1>
-                    {showResetButton && (
-                      <button
-                        onClick={handleSystemReset}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-lg animate-scale-in flex items-center gap-1.5 transition-colors"
-                        title="Clear all cached data and reload"
-                      >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
@@ -1356,63 +1559,42 @@ export default function Home() {
                       </button>
                     )}
                   </div>
-                  {userProfile && (
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {userProfile.role === 'teacher' && userProfile.assignedClassroom && (
-                        <span className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg text-sm font-semibold shadow-md">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-                          </svg>
-                          {userProfile.assignedClassroom}
-                        </span>
-                      )}
-                      <button
-                        onClick={handleChangeProfile}
-                        className="text-xs text-gray-500 hover:text-gray-700 underline"
-                      >
-                        Change
-                      </button>
-                    </div>
-                  )}
-                  {!userProfile && (
-                    <p className="text-gray-600 text-sm sm:text-base md:text-lg">
-                      Live classroom attendance
-                    </p>
-                  )}
-                </div>
+                {userProfile && (
+                  <div className="flex items-center gap-sm flex-wrap mt-xs">
+                    {userProfile.role === 'teacher' && userProfile.assignedClassroom && (
+                      <span className="btn-primary !py-xxs !px-sm text-caption-strong inline-flex items-center gap-xxs">
+                        <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                        </svg>
+                        {userProfile.assignedClassroom}
+                      </span>
+                    )}
+                    <button type="button" onClick={handleChangeProfile} className="text-link text-caption">
+                      Change profile
+                    </button>
+                  </div>
+                )}
+                {!userProfile && (
+                  <p className="font-text text-body text-ink-muted-48 mt-xs">Live classroom attendance</p>
+                )}
+              </div>
 
-                {/* Status Information */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Mode indicator */}
-                  {mode && (
-                    <span
-                      className={`px-3 py-1 rounded-md text-xs font-semibold border ${
-                        mode === 'mock'
-                          ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                          : 'bg-green-50 text-green-700 border-green-200'
-                      }`}
-                    >
-                      {mode === 'mock' ? 'Mock Mode' : 'Live Mode'}
-                    </span>
-                  )}
-                  
-                  {/* Refresh mode indicator */}
-                  <span
-                    className={`px-3 py-1 rounded-md text-xs font-semibold border ${
-                      refreshMode === 'service'
-                        ? 'bg-blue-50 text-blue-700 border-blue-200'
-                        : 'bg-gray-50 text-gray-700 border-gray-200'
-                    }`}
-                    title={refreshMode === 'service' ? 'Refreshing every 30 seconds' : 'Refreshing every 5 minutes'}
-                  >
-                    {refreshMode === 'service' ? '⚡ Service Time' : '🌙 Off-Hours'}
+              <div className="flex items-center gap-sm flex-wrap shrink-0">
+                {mode && (
+                  <span className="chip-option !py-xxs !px-sm text-fine-print">
+                    {mode === 'mock' ? 'Mock' : 'Live'}
                   </span>
-
-                  {/* Last updated time */}
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                )}
+                <span
+                  className="chip-option !py-xxs !px-sm text-fine-print"
+                  title={refreshMode === 'service' ? 'Refreshing every 30 seconds' : 'Refreshing every 5 minutes'}
+                >
+                  {refreshMode === 'service' ? 'Service time' : 'Off-hours'}
+                </span>
+                <div className="flex items-center gap-xs font-text text-caption text-ink-muted-80">
                     {loading && checkIns.length > 0 && (
                       <svg
-                        className="w-4 h-4 animate-spin text-gray-400"
+                        className="w-4 h-4 animate-spin text-ink-muted-48"
                         fill="none"
                         viewBox="0 0 24 24"
                       >
@@ -1431,26 +1613,27 @@ export default function Home() {
                         ></path>
                       </svg>
                     )}
-                    <span className="font-medium">{formatLastUpdated()}</span>
-                  </div>
+                  <span className="font-text text-caption-strong">{formatLastUpdated()}</span>
                 </div>
               </div>
             </div>
-          </header>
+          </div>
+
+          <div className="px-md sm:px-lg pb-xl">
 
           {/* Admin Tabs and Content */}
           {userProfile?.role === 'admin' ? (
             <>
               {/* Tab Navigation */}
-              <div className="mb-4">
-                <div className="bg-white rounded-lg shadow-lg border-b border-gray-200">
-                  <nav className="flex gap-1 p-2">
+              <div className="mb-md">
+                <nav className="flex gap-xs p-xs bg-canvas rounded-lg border border-hairline">
                     <button
+                      type="button"
                       onClick={() => setActiveAdminTab('overview')}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all ${
+                      className={`flex items-center gap-xs px-md py-xs rounded-pill font-text text-caption transition-all active:scale-[0.98] ${
                         activeAdminTab === 'overview'
-                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-primary text-on-primary'
+                          : 'text-ink-muted-80 hover:bg-canvas-parchment'
                       }`}
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1459,11 +1642,12 @@ export default function Home() {
                       Overview
                     </button>
                     <button
+                      type="button"
                       onClick={() => setActiveAdminTab('checkins')}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all ${
+                      className={`flex items-center gap-xs px-md py-xs rounded-pill font-text text-caption transition-all active:scale-[0.98] ${
                         activeAdminTab === 'checkins'
-                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md'
-                          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                          ? 'bg-primary text-on-primary'
+                          : 'text-ink-muted-80 hover:bg-canvas-parchment'
                       }`}
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1471,17 +1655,16 @@ export default function Home() {
                       </svg>
                       Check-Ins
                       {checkIns.length > 0 && (
-                        <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                        <span className={`ml-xs px-sm py-xxs rounded-pill font-text text-fine-print ${
                           activeAdminTab === 'checkins'
                             ? 'bg-white/20'
-                            : 'bg-primary-100 text-primary-700'
+                            : 'bg-canvas-parchment text-primary'
                         }`}>
                           {checkIns.filter(c => !c.checkedOut).length}
                         </span>
                       )}
                     </button>
-                  </nav>
-                </div>
+                </nav>
               </div>
 
               {/* Tab Content */}
@@ -1508,15 +1691,14 @@ export default function Home() {
                 // Check-Ins Tab - Filters and Table
                 <>
                   {/* Filters and Stats */}
-                  <div id="filters-section" className="mb-4">
-            <div className="bg-white rounded-lg shadow-lg p-3 md:p-4">
+                  <div id="filters-section" className="mb-md">
+            <div className="card-utility !p-md">
               {/* Location & Classroom Dropdowns (Admin Only - Side by Side) */}
               {userProfile?.role === 'admin' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                  {/* Location Dropdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-lg mb-lg">
                   <div>
-                    <label htmlFor="location-select" className="flex items-center gap-2 text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">
-                      <svg className="w-4 h-4 text-primary-500" fill="currentColor" viewBox="0 0 20 20">
+                    <label htmlFor="location-select" className="flex items-center gap-xs font-text text-caption-strong text-ink mb-xs">
+                      <svg className="w-4 h-4 text-primary shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                       </svg>
                       Location
@@ -1525,7 +1707,7 @@ export default function Home() {
                       id="location-select"
                       value={selectedLocation}
                       onChange={(e) => setSelectedLocation(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all text-base font-medium bg-white hover:border-gray-400 cursor-pointer"
+                      className={FILTER_SELECT_CLASS}
                     >
                       {locationOptions.map((location) => {
                         const count = location === 'All'
@@ -1549,10 +1731,9 @@ export default function Home() {
                     </select>
                   </div>
 
-                  {/* Classroom Dropdown */}
                   <div>
-                    <label htmlFor="classroom-select" className="flex items-center gap-2 text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">
-                      <svg className="w-4 h-4 text-primary-500" fill="currentColor" viewBox="0 0 20 20">
+                    <label htmlFor="classroom-select" className="flex items-center gap-xs font-text text-caption-strong text-ink mb-xs">
+                      <svg className="w-4 h-4 text-primary shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                       </svg>
                       Classroom
@@ -1561,7 +1742,7 @@ export default function Home() {
                       id="classroom-select"
                       value={selectedClassroom}
                       onChange={(e) => setSelectedClassroom(e.target.value)}
-                      className="w-full px-4 py-2.5 rounded-lg border-2 border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all text-base font-medium bg-white hover:border-gray-400 cursor-pointer"
+                      className={FILTER_SELECT_CLASS}
                     >
                       {classroomOptions.map((classroom) => {
                         const count = classroom === 'All'
@@ -1587,107 +1768,15 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Service Time Filters */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-2">
-                      <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                      </svg>
-                      Service Time
-                    </h3>
-                  </div>
-                  <div 
-                    ref={overviewServiceTimeScrollRef}
-                    className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" 
-                    style={{scrollbarWidth: 'thin'}}
-                  >
-                    {serviceTimes.map((time) => (
-                      <button
-                        key={time}
-                        data-service-time={time}
-                        onClick={() => setSelectedServiceTime(time)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex-shrink-0 whitespace-nowrap ${
-                          selectedServiceTime === time
-                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow'
-                        }`}
-                      >
-                        {time}
-                        {checkIns.length > 0 && (
-                          <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs ${
-                            selectedServiceTime === time 
-                              ? 'bg-white bg-opacity-20' 
-                              : 'bg-blue-100 text-blue-700'
-                          }`}>
-                            {time === 'All' 
-                              ? checkIns.filter(c => !c.checkedOut && c.status !== 'no-show' && 
-                                  (selectedLocation === 'All' || c.locationName === selectedLocation) &&
-                                  (selectedClassroom === 'All' || c.className === selectedClassroom)
-                                ).length
-                              : checkIns.filter(c => 
-                                  !c.checkedOut &&
-                                  c.status !== 'no-show' &&
-                                  c.serviceName.toUpperCase().includes(time) && 
-                                  (selectedLocation === 'All' || c.locationName === selectedLocation) &&
-                                  (selectedClassroom === 'All' || c.className === selectedClassroom)
-                                ).length
-                            }
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Statistics Bar (Both Admin and Teacher) */}
-                <div className="flex flex-wrap justify-end gap-3">
-                    {/* Checked In */}
-                    <div className="bg-white rounded-lg shadow-md p-3 min-w-[140px] sm:min-w-[160px] flex-1 sm:flex-none">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-green-600 rounded-lg p-2 flex-shrink-0">
-                          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-600">Checked In</div>
-                          <div className="text-xl font-bold text-gray-900">{stats.checkedIn}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Checked Out */}
-                    <div className="bg-white rounded-lg shadow-md p-3 min-w-[140px] sm:min-w-[160px] flex-1 sm:flex-none">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-gray-500 rounded-lg p-2 flex-shrink-0">
-                          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-600">Checked Out</div>
-                          <div className="text-xl font-bold text-gray-900">{stats.checkedOut}</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Total Kids */}
-                    <div className="bg-white rounded-lg shadow-md p-3 min-w-[140px] sm:min-w-[160px] flex-1 sm:flex-none">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 rounded-lg p-2 flex-shrink-0">
-                          <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-600">Total Kids</div>
-                          <div className="text-xl font-bold text-gray-900">{stats.total}</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+                <ServiceTimeFilterRow
+                  serviceTimes={serviceTimes}
+                  selectedServiceTime={selectedServiceTime}
+                  onSelect={setSelectedServiceTime}
+                  getCount={getActiveCountForServiceTime}
+                  scrollRef={overviewServiceTimeScrollRef}
+                />
+                <StatsBar stats={statsBarItems} />
               </div>
             </div>
           </div>
@@ -1699,7 +1788,7 @@ export default function Home() {
                       <Loader />
                     ) : error ? (
                       // Error state
-                      <div className="bg-red-50 border-2 border-red-200 rounded-lg p-8 text-center">
+                      <div className="card-utility text-center border-red-300">
                         <svg
                           className="mx-auto h-16 w-16 text-red-500 mb-4"
                           fill="none"
@@ -1713,19 +1802,19 @@ export default function Home() {
                             d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                           />
                         </svg>
-                        <h3 className="text-xl font-semibold text-red-800 mb-2">
+                        <h3 className="font-text text-body-strong text-ink mb-sm">
                           Error Loading Check-Ins
                         </h3>
-                        <p className="text-red-600 mb-4">{error}</p>
-                        <p className="text-sm text-gray-600">
+                        <p className="font-text text-body text-ink-muted-80 mb-md">{error}</p>
+                        <p className="font-text text-caption text-ink-muted-48">
                           Dashboard will automatically retry in a few seconds...
                         </p>
                       </div>
                     ) : filteredCheckIns.length === 0 ? (
                       // Empty state - no active check-ins
-                      <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-12 text-center">
+                      <div className="card-utility text-center py-section">
                         <svg
-                          className="mx-auto h-24 w-24 text-gray-400 mb-4"
+                          className="mx-auto h-24 w-24 text-ink-muted-48 mb-lg"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -1737,10 +1826,10 @@ export default function Home() {
                             d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                           />
                         </svg>
-                        <h3 className="text-2xl font-semibold text-gray-700 mb-2">
+                        <h3 className="font-display text-display-md text-ink mb-sm">
                           No Check-Ins
                         </h3>
-                        <p className="text-gray-500">
+                        <p className="font-text text-body text-ink-muted-48">
                           {checkIns.length > 0 
                             ? 'All kids have been checked out for this service.'
                             : 'No kids are currently checked in.'}
@@ -1769,13 +1858,16 @@ export default function Home() {
                       // Apply same filters as main table
                       const matchesLocation = selectedLocation === 'All' || checkIn.locationName === selectedLocation;
                       const matchesClassroom = selectedClassroom === 'All' || checkIn.className === selectedClassroom;
-                      const matchesServiceTime = selectedServiceTime === 'All' ||
-                        checkIn.serviceName.toUpperCase().includes(selectedServiceTime);
+                      const matchesServiceTime = checkoutServiceTime === 'All' ||
+                        checkIn.serviceName.toUpperCase().includes(checkoutServiceTime);
                       
                       return matchesLocation && matchesClassroom && matchesServiceTime;
                     })}
                     onUndo={handleCheckIn}
-                    selectedServiceTime={selectedServiceTime}
+                    selectedServiceTime={checkoutServiceTime}
+                    selectedLocation={selectedLocation}
+                    serviceTimeOptions={checkoutServiceOptions}
+                    onServiceTimeChange={(time) => setCheckoutServiceTime(time)}
                   />
                 </>
               )}
@@ -1784,109 +1876,17 @@ export default function Home() {
             // Teacher View - No tabs, direct filters and content
             <>
               {/* Filters and Stats */}
-              <div id="filters-section" className="mb-4">
-                <div className="bg-white rounded-lg shadow-lg p-3 md:p-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Service Time Filters */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-2">
-                          <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                          </svg>
-                          Service Time
-                        </h3>
-                      </div>
-                      <div 
-                        ref={checkInsServiceTimeScrollRef}
-                        className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" 
-                        style={{scrollbarWidth: 'thin'}}
-                      >
-                        {serviceTimes.map((time) => (
-                          <button
-                            key={time}
-                            data-service-time={time}
-                            onClick={() => setSelectedServiceTime(time)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex-shrink-0 whitespace-nowrap ${
-                              selectedServiceTime === time
-                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow'
-                            }`}
-                          >
-                            {time}
-                            {checkIns.length > 0 && (
-                              <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs ${
-                                selectedServiceTime === time 
-                                  ? 'bg-white bg-opacity-20' 
-                                  : 'bg-blue-100 text-blue-700'
-                              }`}>
-                                {time === 'All' 
-                                  ? checkIns.filter(c => !c.checkedOut && c.status !== 'no-show' && 
-                                      (selectedLocation === 'All' || c.locationName === selectedLocation) &&
-                                      (selectedClassroom === 'All' || c.className === selectedClassroom)
-                                    ).length
-                                  : checkIns.filter(c => 
-                                      !c.checkedOut &&
-                                      c.status !== 'no-show' &&
-                                      c.serviceName.toUpperCase().includes(time) && 
-                                      (selectedLocation === 'All' || c.locationName === selectedLocation) &&
-                                      (selectedClassroom === 'All' || c.className === selectedClassroom)
-                                    ).length
-                                }
-                              </span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Statistics Bar (Teacher) */}
-                    <div className="flex flex-wrap justify-end gap-3">
-                      {/* Checked In */}
-                      <div className="bg-white rounded-lg shadow-md p-3 min-w-[140px] sm:min-w-[160px] flex-1 sm:flex-none">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-green-600 rounded-lg p-2 flex-shrink-0">
-                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-600">Checked In</div>
-                            <div className="text-xl font-bold text-gray-900">{stats.checkedIn}</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Checked Out */}
-                      <div className="bg-white rounded-lg shadow-md p-3 min-w-[140px] sm:min-w-[160px] flex-1 sm:flex-none">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-gray-500 rounded-lg p-2 flex-shrink-0">
-                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-600">Checked Out</div>
-                            <div className="text-xl font-bold text-gray-900">{stats.checkedOut}</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Total Kids */}
-                      <div className="bg-white rounded-lg shadow-md p-3 min-w-[140px] sm:min-w-[160px] flex-1 sm:flex-none">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-blue-600 rounded-lg p-2 flex-shrink-0">
-                            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                            </svg>
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-600">Total Kids</div>
-                            <div className="text-xl font-bold text-gray-900">{stats.total}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+              <div id="filters-section" className="mb-md">
+                <div className="card-utility !p-md">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+                    <ServiceTimeFilterRow
+                      serviceTimes={serviceTimes}
+                      selectedServiceTime={selectedServiceTime}
+                      onSelect={setSelectedServiceTime}
+                      getCount={getActiveCountForServiceTime}
+                      scrollRef={checkInsServiceTimeScrollRef}
+                    />
+                    <StatsBar stats={statsBarItems} />
                   </div>
                 </div>
               </div>
@@ -1898,7 +1898,7 @@ export default function Home() {
                   <Loader />
                 ) : error ? (
                   // Error state
-                  <div className="bg-red-50 border-2 border-red-200 rounded-lg p-8 text-center">
+                  <div className="card-utility text-center border-red-300">
                     <svg
                       className="mx-auto h-16 w-16 text-red-500 mb-4"
                       fill="none"
@@ -1922,7 +1922,7 @@ export default function Home() {
                   </div>
                 ) : filteredCheckIns.length === 0 ? (
                   // Empty state - no active check-ins
-                  <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-12 text-center">
+                  <div className="card-utility text-center py-section">
                     <svg
                       className="mx-auto h-24 w-24 text-gray-400 mb-4"
                       fill="none"
@@ -1970,16 +1970,25 @@ export default function Home() {
                 // Apply same filters as main table
                 const matchesLocation = selectedLocation === 'All' || checkIn.locationName === selectedLocation;
                 const matchesClassroom = selectedClassroom === 'All' || checkIn.className === selectedClassroom;
-                const matchesServiceTime = selectedServiceTime === 'All' ||
-                  checkIn.serviceName.toUpperCase().includes(selectedServiceTime);
+                const matchesServiceTime = checkoutServiceTime === 'All' ||
+                  checkIn.serviceName.toUpperCase().includes(checkoutServiceTime);
                 
                 return matchesLocation && matchesClassroom && matchesServiceTime;
               })}
               onUndo={handleCheckIn}
-              selectedServiceTime={selectedServiceTime}
+              selectedServiceTime={checkoutServiceTime}
+              selectedLocation={selectedLocation}
+              serviceTimeOptions={checkoutServiceOptions}
+              onServiceTimeChange={(time) => setCheckoutServiceTime(time)}
             />
           )}
           
+          {/* Recent check-outs tray (sticky) */}
+          <RecentCheckoutsTray
+            items={recentCheckouts}
+            onUndo={handleCheckIn}
+          />
+
           {/* Toast Notification */}
           {toast && (
             <Toast
@@ -2004,6 +2013,7 @@ export default function Home() {
               </ul>
             </div>
           </footer> */}
+          </div>
         </div>
       </main>
     </>

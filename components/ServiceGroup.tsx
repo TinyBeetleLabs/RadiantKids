@@ -241,65 +241,57 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
   };
 
   return (
-    <div className="mb-6 fade-in">
-      {/* Service Header with Search */}
-      <div className="bg-white border-b-2 border-emerald-500 rounded-t-lg px-4 md:px-6 py-3 shadow-sm">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          {/* Left: Service Name + Badge */}
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg md:text-xl font-bold text-gray-900">
-              {serviceName}
-            </h2>
-            <span className="bg-emerald-100 text-emerald-700 px-3 md:px-4 py-1 rounded-full text-sm font-normal border border-emerald-300">
-              {searchQuery 
+    <div className="mb-md fade-in">
+      {/* Service Header with Search — always visible */}
+      <div className="bg-canvas border-b border-hairline rounded-t-lg px-md py-sm">
+        <div className="flex items-center justify-between gap-sm flex-wrap">
+          <div className="flex items-center gap-xs min-w-0 shrink">
+            <h2 className="font-text text-body-strong text-ink truncate">{serviceName}</h2>
+            <span className="chip-option !py-xxs !px-xs text-fine-print shrink-0">
+              {searchQuery
                 ? `${showingKidsCount} of ${totalKidsInFiltered} ${totalKidsInFiltered === 1 ? 'child' : 'children'}`
-                : `${activeCheckIns.length} ${activeCheckIns.length === 1 ? 'child' : 'children'}`
-              }
+                : `${activeCheckIns.length} ${activeCheckIns.length === 1 ? 'child' : 'children'}`}
             </span>
           </div>
-
-          {/* Right: Search Bar (only show if 10+ kids) */}
-          {activeCheckIns.length > 10 && (
-            <div className="flex-1 max-w-md min-w-[250px]">
-              <SearchBar
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Search by name or code..."
-                resultCount={searchQuery ? totalKidsInFiltered : undefined}
-                totalCount={searchQuery ? activeCheckIns.length : undefined}
-              />
-            </div>
-          )}
+          <div className="flex-1 min-w-[180px] max-w-md w-full sm:w-auto sm:ml-auto">
+            <SearchBar
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search by name or code..."
+              resultCount={searchQuery ? totalKidsInFiltered : undefined}
+              totalCount={searchQuery ? activeCheckIns.length : undefined}
+            />
+          </div>
         </div>
       </div>
 
       {/* Desktop/Tablet Table View - Hidden on mobile */}
-      <div className="hidden md:block overflow-hidden shadow-md rounded-b-lg">
+      <div className="hidden md:block overflow-hidden border border-hairline border-t-0 rounded-b-lg">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="min-w-full divide-y divide-hairline">
             <caption className="sr-only">
               Check-ins for {serviceName}: {activeCheckIns.length} {activeCheckIns.length === 1 ? 'child' : 'children'}
             </caption>
-            <thead className="bg-gray-50">
+            <thead className="bg-canvas-parchment">
               <tr>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-lg py-sm text-left font-text text-fine-print text-ink-muted-48 uppercase tracking-wide">
                   Child Name
                 </th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-lg py-sm text-left font-text text-fine-print text-ink-muted-48 uppercase tracking-wide">
                   Security Code
                 </th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-lg py-sm text-left font-text text-fine-print text-ink-muted-48 uppercase tracking-wide">
                   Check-In Time
                 </th>
-                <th className="px-6 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-lg py-sm text-left font-text text-fine-print text-ink-muted-48 uppercase tracking-wide">
                   Medical Notes
                 </th>
-                <th className="px-6 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-lg py-sm text-right font-text text-fine-print text-ink-muted-48 uppercase tracking-wide whitespace-nowrap w-[1%]">
                   Action
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-canvas divide-y divide-hairline">
               {paginatedFamilies.map((family, familyIndex) => {
                 const isExpanded = isFamilyExpanded(family.securityCode);
                 const isSingleChild = family.children.length === 1;
@@ -310,11 +302,11 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                   return (
                     <tr
                       key={child.id}
-                      className="hover:bg-gray-50 transition-colors duration-150"
+                      className="hover:bg-canvas-parchment transition-colors duration-150"
                     >
-                      <td className="px-6 py-2.5 whitespace-nowrap">
+                      <td className="px-md py-xs whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-ink">
                             {child.childName}
                           </div>
                           {/* Badges */}
@@ -340,20 +332,20 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-2.5 whitespace-nowrap">
-                        <span className="inline-flex items-center px-3 py-1 rounded-md text-base font-bold bg-blue-100 text-blue-800 border border-blue-300 shadow-sm">
+                      <td className="px-md py-xs whitespace-nowrap">
+                        <span className="badge-security text-body-strong">
                           {family.securityCode}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 font-medium">
+                      <td className="px-md py-xs whitespace-nowrap">
+                        <div className="text-sm text-ink font-medium">
                           {formatTime(child.checkInTime)}
                         </div>
-                        {/* <div className="text-xs text-gray-500">
+                        {/* <div className="text-xs text-ink-muted-48">
                           {getTimeAgo(child.checkInTime)}
                         </div> */}
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="px-md py-xs">
                         {child.medicalNotes ? (
                           <div className="flex items-center space-x-2 bg-yellow-50 border border-yellow-200 rounded-md px-2 py-1">
                             <svg
@@ -367,22 +359,24 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                                 clipRule="evenodd"
                               />
                             </svg>
-                            <span className="text-sm text-gray-800 font-medium">
+                            <span className="text-sm text-ink font-medium">
                               {child.medicalNotes}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400">None</span>
+                          <span className="text-sm text-ink-muted-48">None</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
-                        <CheckOutActions
-                          familyName={family.familyName}
-                          securityCode={family.securityCode}
-                          onCheckOut={() => onCheckOut(family.securityCode)}
-                          onDismiss={() => onDismiss(family.securityCode, serviceName)}
-                          onRollOver={() => onRollOver(family.securityCode, serviceName)}
-                        />
+                      <td className="px-md py-xs text-right whitespace-nowrap w-[1%]">
+                        <div className="flex justify-end">
+                          <CheckOutActions
+                            familyName={family.familyName}
+                            securityCode={family.securityCode}
+                            onCheckOut={() => onCheckOut(family.securityCode)}
+                            onDismiss={() => onDismiss(family.securityCode, serviceName)}
+                            onRollOver={() => onRollOver(family.securityCode, serviceName)}
+                          />
+                        </div>
                       </td>
                     </tr>
                   );
@@ -392,8 +386,8 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                 return (
                   <React.Fragment key={family.securityCode}>
                     {/* Family Header Row */}
-                    <tr className="bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors duration-150">
-                      <td className="px-6 py-2.5">
+                    <tr className="bg-canvas-parchment hover:bg-canvas-parchment cursor-pointer transition-colors duration-150">
+                      <td className="px-md py-xs">
                         <div className="flex items-center space-x-3">
                           <button
                             onClick={() => toggleFamily(family.securityCode)}
@@ -402,7 +396,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                             aria-expanded={isExpanded}
                           >
                             <svg
-                              className={`w-4 h-4 text-blue-600 transition-transform duration-200 ${isExpanded ? 'transform rotate-90' : ''}`}
+                              className={`w-4 h-4 text-primary transition-transform duration-200 ${isExpanded ? 'transform rotate-90' : ''}`}
                               fill="none"
                               viewBox="0 0 24 24"
                               stroke="currentColor"
@@ -416,50 +410,52 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                             </svg>
                           </button>
                           <div>
-                            <div className="text-sm font-bold text-gray-900">
+                            <div className="text-sm font-bold text-ink">
                               {family.familyName} Family
                             </div>
-                            <div className="text-xs text-gray-600">
+                            <div className="text-xs text-ink-muted-48">
                               {family.children.length} children
                             </div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-2.5">
-                        <span className="inline-flex items-center px-3 py-1 rounded-md text-base font-bold bg-blue-100 text-blue-800 border border-blue-300 shadow-sm">
+                      <td className="px-md py-xs">
+                        <span className="badge-security text-body-strong">
                           {family.securityCode}
                         </span>
                       </td>
-                      <td className="px-6 py-2.5">
-                        <div className="text-sm text-gray-900 font-medium">
+                      <td className="px-md py-xs">
+                        <div className="text-sm text-ink font-medium">
                           {formatTime(family.checkInTime)}
                         </div>
-                        {/* <div className="text-xs text-gray-500">
+                        {/* <div className="text-xs text-ink-muted-48">
                           {getTimeAgo(family.checkInTime)}
                         </div> */}
                       </td>
-                      <td className="px-6 py-2.5">
+                      <td className="px-md py-xs">
                         {family.children.some(c => c.medicalNotes) ? (
                           <div className="flex items-center space-x-2">
                             <svg className="w-4 h-4 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                             </svg>
-                            <span className="text-sm text-gray-800 font-medium">
+                            <span className="text-sm text-ink font-medium">
                               {family.children.filter(c => c.medicalNotes).length} {family.children.filter(c => c.medicalNotes).length === 1 ? 'note' : 'notes'}
                             </span>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400">None</span>
+                          <span className="text-sm text-ink-muted-48">None</span>
                         )}
                       </td>
-                      <td className="px-6 py-2.5 text-center">
-                        <CheckOutActions
-                          familyName={family.familyName}
-                          securityCode={family.securityCode}
-                          onCheckOut={() => onCheckOut(family.securityCode)}
-                          onDismiss={() => onDismiss(family.securityCode, serviceName)}
-                          onRollOver={() => onRollOver(family.securityCode, serviceName)}
-                        />
+                      <td className="px-md py-xs text-right whitespace-nowrap w-[1%]">
+                        <div className="flex justify-end">
+                          <CheckOutActions
+                            familyName={family.familyName}
+                            securityCode={family.securityCode}
+                            onCheckOut={() => onCheckOut(family.securityCode)}
+                            onDismiss={() => onDismiss(family.securityCode, serviceName)}
+                            onRollOver={() => onRollOver(family.securityCode, serviceName)}
+                          />
+                        </div>
                       </td>
                     </tr>
 
@@ -467,11 +463,11 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                     {isExpanded && family.children.map((child) => (
                       <tr
                         key={child.id}
-                        className="hover:bg-gray-50 transition-colors duration-150"
+                        className="hover:bg-canvas-parchment transition-colors duration-150"
                       >
-                        <td className="px-6 py-2 pl-16">
+                        <td className="px-md py-xs pl-12">
                           <div className="flex items-center gap-2">
-                            <div className="text-sm font-medium text-gray-700">
+                            <div className="text-sm font-medium text-ink-muted-80">
                               {child.childName}
                             </div>
                             {/* Badges */}
@@ -497,31 +493,31 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-2">
+                        <td className="px-md py-xs">
                           {/* Empty - code shown in family header */}
                         </td>
-                        <td className="px-6 py-2">
+                        <td className="px-md py-xs">
                           {child.checkInTime !== family.checkInTime && (
-                            <div className="text-sm text-gray-500">
+                            <div className="text-sm text-ink-muted-48">
                               {formatTime(child.checkInTime)}
                             </div>
                           )}
                         </td>
-                        <td className="px-6 py-2">
+                        <td className="px-md py-xs">
                           {child.medicalNotes ? (
                             <div className="flex items-center space-x-2 bg-yellow-50 border border-yellow-200 rounded-md px-2 py-1">
                               <svg className="w-4 h-4 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                               </svg>
-                              <span className="text-sm text-gray-800 font-medium">
+                              <span className="text-sm text-ink font-medium">
                                 {child.medicalNotes}
                               </span>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-400">None</span>
+                            <span className="text-sm text-ink-muted-48">None</span>
                           )}
                         </td>
-                        <td className="px-6 py-2 text-center">
+                        <td className="px-md py-xs text-right whitespace-nowrap w-[1%]">
                           {/* Empty - family checked out together */}
                         </td>
                       </tr>
@@ -548,8 +544,8 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
       </div>
 
       {/* Mobile Card View - Only visible on mobile */}
-      <div className="md:hidden bg-white rounded-b-lg shadow-md overflow-hidden">
-        <div className="divide-y divide-gray-200">
+      <div className="md:hidden bg-canvas rounded-b-lg border border-hairline border-t-0 overflow-hidden">
+        <div className="divide-y divide-hairline">
           {paginatedFamilies.map((family, index) => {
             const isExpanded = isFamilyExpanded(family.securityCode);
             const isSingleChild = family.children.length === 1;
@@ -558,14 +554,14 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
             if (isSingleChild) {
               const child = family.children[0];
               return (
-                <div key={child.id} className="p-4 hover:bg-blue-50 transition-colors">
+                <div key={child.id} className="p-lg hover:bg-canvas-parchment transition-colors">
                   {/* Child Name & Security Code */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                      <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1">
                         Child Name
                       </div>
-                      <div className="text-base font-bold text-gray-900 mb-2">
+                      <div className="text-base font-bold text-ink mb-2">
                         {child.childName}
                       </div>
                       {/* Badges */}
@@ -595,7 +591,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
                     {/* Security Code - Large badge */}
                     <div className="ml-3">
-                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 text-right">
+                      <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1 text-right">
                         Code
                       </div>
                       <span className="inline-flex items-center px-3 py-1.5 rounded-md text-lg font-bold bg-blue-100 text-blue-800 border border-blue-300 shadow-sm">
@@ -606,12 +602,12 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
                   {/* Check-In Time */}
                   <div className="mb-3">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                    <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1">
                       Check-In Time
                     </div>
-                    <div className="text-sm text-gray-900 font-medium">
+                    <div className="text-sm text-ink font-medium">
                       {formatTime(child.checkInTime)}
-                      <span className="text-xs text-gray-500 ml-2">
+                      <span className="text-xs text-ink-muted-48 ml-2">
                         ({getTimeAgo(child.checkInTime)})
                       </span>
                     </div>
@@ -619,7 +615,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
                   {/* Medical Notes */}
                   <div className="mb-3">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                    <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1">
                       Medical Notes
                     </div>
                     {child.medicalNotes ? (
@@ -627,12 +623,12 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                         <svg className="w-4 h-4 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
-                        <span className="text-sm text-gray-800 font-medium">
+                        <span className="text-sm text-ink font-medium">
                           {child.medicalNotes}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-400">None</span>
+                      <span className="text-sm text-ink-muted-48">None</span>
                     )}
                   </div>
 
@@ -654,7 +650,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
             return (
               <div
                 key={family.securityCode}
-                className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-blue-500"
+                className="p-lg bg-canvas-parchment border-l-4 border-primary"
               >
                 {/* Family Header */}
                 <div className="flex items-start justify-between mb-3">
@@ -667,7 +663,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                         aria-expanded={isExpanded}
                       >
                         <svg
-                          className={`w-4 h-4 text-blue-600 transition-transform ${isExpanded ? 'transform rotate-90' : ''}`}
+                          className={`w-4 h-4 text-primary transition-transform ${isExpanded ? 'transform rotate-90' : ''}`}
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -677,12 +673,12 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                         </svg>
                       </button>
                       <div>
-                        <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                        <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide">
                           Family
                         </div>
-                        <div className="text-base font-bold text-gray-900">
+                        <div className="text-base font-bold text-ink">
                           {family.familyName} Family
-                          <span className="ml-1 text-sm font-normal text-gray-600">
+                          <span className="ml-1 text-sm font-normal text-ink-muted-48">
                             ({family.children.length})
                           </span>
                         </div>
@@ -694,7 +690,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                       <div className="space-y-2 ml-2 mt-2 border-l-2 border-blue-300 pl-3">
                         {family.children.map((child) => (
                           <div key={child.id} className="flex flex-col gap-1">
-                            <div className="text-sm font-medium text-gray-700">
+                            <div className="text-sm font-medium text-ink-muted-80">
                               • {child.childName}
                             </div>
                             {/* Badges */}
@@ -720,7 +716,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
                   {/* Security Code */}
                   <div className="ml-3">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 text-right">
+                    <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1 text-right">
                       Code
                     </div>
                     <span className="inline-flex items-center px-3 py-1.5 rounded-md text-lg font-bold bg-blue-100 text-blue-800 border border-blue-300 shadow-sm">
@@ -731,12 +727,12 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
                 {/* Check-In Time */}
                 <div className="mb-3">
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                  <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1">
                     Check-In Time
                   </div>
-                  <div className="text-sm text-gray-900 font-medium">
+                  <div className="text-sm text-ink font-medium">
                     {formatTime(family.checkInTime)}
-                    <span className="text-xs text-gray-500 ml-2">
+                    <span className="text-xs text-ink-muted-48 ml-2">
                       ({getTimeAgo(family.checkInTime)})
                     </span>
                   </div>
@@ -744,7 +740,7 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
                 {/* Medical Notes */}
                 <div className="mb-3">
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                  <div className="text-xs font-bold text-ink-muted-48 uppercase tracking-wide mb-1">
                     Medical Notes
                   </div>
                   <div className="space-y-2">
@@ -754,14 +750,14 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
                           <svg className="w-4 h-4 text-yellow-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                           </svg>
-                          <span className="text-sm text-gray-800 font-medium">
+                          <span className="text-sm text-ink font-medium">
                             {child.childName}: {child.medicalNotes}
                           </span>
                         </div>
                       ) : null
                     )}
                     {family.children.every((child) => !child.medicalNotes) && (
-                      <span className="text-sm text-gray-400">None</span>
+                      <span className="text-sm text-ink-muted-48">None</span>
                     )}
                   </div>
 
@@ -798,9 +794,9 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
 
       {/* Search Results Empty State */}
       {searchQuery && filteredFamilies.length === 0 && (
-        <div className="bg-white px-4 md:px-6 py-12 text-center rounded-b-lg shadow-md">
+        <div className="bg-canvas px-lg py-section text-center rounded-b-lg border border-hairline border-t-0">
           <svg
-            className="mx-auto h-16 w-16 text-gray-400 mb-4"
+            className="mx-auto h-16 w-16 text-ink-muted-48 mb-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -812,15 +808,15 @@ export default function ServiceGroup({ serviceName, checkIns, onCheckOut, onChec
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <h3 className="text-xl font-semibold text-gray-700 mb-2">
+          <h3 className="text-xl font-semibold text-ink-muted-80 mb-2">
             No Results Found
           </h3>
-          <p className="text-gray-600 mb-4">
+          <p className="text-ink-muted-48 mb-4">
             No kids found matching "<span className="font-semibold">{searchQuery}</span>"
           </p>
           <button
             onClick={() => setSearchQuery('')}
-            className="px-4 py-2 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 transition-colors"
+            className="btn-primary"
           >
             Clear Search
           </button>

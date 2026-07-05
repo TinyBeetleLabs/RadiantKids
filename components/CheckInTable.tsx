@@ -108,9 +108,9 @@ export default function CheckInTable({
   // Handle empty state
   if (checkIns.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+      <div className="card-utility text-center py-section">
         <svg
-          className="mx-auto h-24 w-24 text-gray-400 mb-4"
+          className="mx-auto h-24 w-24 text-ink-muted-48 mb-lg"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -122,10 +122,10 @@ export default function CheckInTable({
             d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
           />
         </svg>
-        <h3 className="text-2xl font-semibold text-gray-700 mb-2">
+        <h3 className="font-display text-display-md text-ink mb-sm">
           No Check-Ins Yet
         </h3>
-        <p className="text-gray-500 text-lg">
+        <p className="font-text text-body text-ink-muted-48">
           Check-ins will appear here as children arrive.
         </p>
       </div>

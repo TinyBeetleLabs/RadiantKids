@@ -81,10 +81,10 @@ export default function LocationGroup({
   return (
     <div className="mb-8">
       {/* Location Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-lg shadow-md">
+      <div className="bg-surface-tile-1 rounded-t-lg">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full px-6 py-4 flex items-center justify-between text-white hover:bg-blue-700/50 transition-all duration-200 rounded-t-lg"
+          className="w-full px-lg py-md flex items-center justify-between text-body-on-dark hover:bg-surface-tile-2 transition-all duration-200 rounded-t-lg min-h-[52px] active:scale-[0.98]"
         >
           <div className="flex items-center gap-3">
             {/* Location Icon */}
@@ -94,8 +94,8 @@ export default function LocationGroup({
             
             {/* Location Name */}
             <div>
-              <h2 className="text-xl font-bold text-left">{locationName}</h2>
-              <p className="text-sm text-blue-100 text-left">
+              <h2 className="font-text text-tagline text-left">{locationName}</h2>
+              <p className="font-text text-caption text-body-muted text-left">
                 {totalKids} {totalKids === 1 ? 'kid' : 'kids'} • {checkedInKids} still here
               </p>
             </div>
@@ -120,7 +120,7 @@ export default function LocationGroup({
 
       {/* Services Stacked with Horizontal Classroom Scroll */}
       {isExpanded && (
-        <div className="bg-gray-50 rounded-b-lg shadow-md p-6 space-y-8">
+        <div className="bg-canvas-parchment rounded-b-lg border border-hairline border-t-0 p-lg space-y-xl">
           {sortedServices.map(([serviceName, serviceCheckIns]) => {
             // Extract just the time from service name
             const timeMatch = serviceName.match(/(\d{1,2}:\d{2}\s?[AP]M)/i);

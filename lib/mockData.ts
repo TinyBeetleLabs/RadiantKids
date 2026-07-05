@@ -53,6 +53,11 @@ export interface CheckInData {
 
 export type Classroom = 'Dreamers' | 'Explorers' | 'Heros' | 'Legends' | 'Club 456';
 
+// Cache mock data so it stays stable across auto-refreshes in mock mode
+let cachedMockCheckIns: CheckInData[] | null = null;
+// Fix the base "now" so check-in times don't drift on each fetch
+const BASE_NOW = Date.now();
+
 /**
  * Location configuration matching Planning Center structure
  * Each location has an event with multiple service times and classrooms
@@ -188,7 +193,13 @@ function getTimeOffset(serviceTime: string): number {
  * Generates 150+ check-ins distributed across all campuses, services, and classrooms
  */
 export function getMockCheckIns(): CheckInData[] {
-  const now = Date.now();
+  // Reuse the same dataset if we've already generated it
+  if (cachedMockCheckIns) {
+    return cachedMockCheckIns;
+  }
+
+  // Use a fixed timestamp so times don't change between fetches
+  const now = BASE_NOW;
   let id = 1;
   let codeNum = 100;
   
@@ -325,6 +336,8 @@ export function getMockCheckIns(): CheckInData[] {
   addCheckIn('Mason', 'South', 'loc_odessa', '12:30 PM', 'Legends', {
     hasBirthday: true
   });
-  
+
+  // Cache and return
+  cachedMockCheckIns = checkIns;
   return checkIns;
 }

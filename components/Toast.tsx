@@ -1,17 +1,15 @@
 /**
  * Toast Component
- * 
- * Displays temporary notifications with optional undo action
- * Used for check-out confirmations and undo functionality
  */
 
 import React, { useEffect } from 'react';
+import Button from '@/components/ui/Button';
 
 interface ToastProps {
   message: string;
   onUndo?: () => void;
   onClose: () => void;
-  duration?: number; // in milliseconds
+  duration?: number;
 }
 
 export default function Toast({ message, onUndo, onClose, duration = 5000 }: ToastProps) {
@@ -24,42 +22,37 @@ export default function Toast({ message, onUndo, onClose, duration = 5000 }: Toa
   }, [duration, onClose]);
 
   return (
-    <div 
-      className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 animate-slide-up"
+    <div
+      className="fixed bottom-lg left-1/2 -translate-x-1/2 z-50 animate-slide-up floating-bar max-w-md w-[calc(100%-32px)]"
       role="status"
       aria-live="polite"
       aria-atomic="true"
     >
-      <div className="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-4 max-w-md">
-        {/* Checkmark Icon */}
-        <div className="flex-shrink-0" aria-hidden="true">
-          <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <div className="flex items-center gap-md w-full">
+        <div className="flex-shrink-0 text-primary" aria-hidden="true">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        
-        {/* Message */}
-        <div className="flex-1 text-sm font-medium">
-          {message}
-        </div>
-        
-        {/* Undo Button */}
+
+        <div className="flex-1 font-text text-body text-ink">{message}</div>
+
         {onUndo && (
-          <button
+          <Button
+            variant="secondary-pill"
+            className="!py-xs !px-md text-caption-strong shrink-0"
             onClick={() => {
               onUndo();
               onClose();
             }}
-            className="flex-shrink-0 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-md text-sm font-semibold transition-colors"
           >
             Undo
-          </button>
+          </Button>
         )}
-        
-        {/* Close Button */}
+
         <button
           onClick={onClose}
-          className="flex-shrink-0 text-gray-400 hover:text-white transition-colors"
+          className="flex-shrink-0 text-ink-muted-48 hover:text-ink transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Close"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -70,4 +63,3 @@ export default function Toast({ message, onUndo, onClose, duration = 5000 }: Toa
     </div>
   );
 }
-
