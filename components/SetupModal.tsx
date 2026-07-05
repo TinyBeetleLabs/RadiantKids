@@ -64,7 +64,7 @@ export default function SetupModal({
   const canSubmit = role && (role === 'admin' || (selectedLocation && selectedClassroom));
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 overflow-y-auto">
+    <div className="fixed inset-0 bg-ink/20 backdrop-blur-[1px] z-50 overflow-y-auto">
       <div className="min-h-full flex items-center justify-center p-lg py-xl">
         <div className="bg-canvas rounded-lg border border-hairline max-w-md w-full max-h-[90vh] flex flex-col animate-scale-in relative my-md">
           {onClose && (

@@ -33,6 +33,7 @@ import AdminStats from '@/components/AdminStats';
 import RecentCheckoutsTray, { RecentCheckoutItem } from '@/components/RecentCheckoutsTray';
 import StatsBar from '@/components/StatsBar';
 import ServiceTimeFilterRow from '@/components/ServiceTimeFilterRow';
+import DashboardSkeleton from '@/components/DashboardSkeleton';
 
 const FILTER_SELECT_CLASS =
   'w-full px-md py-xs rounded-pill border border-hairline font-text text-caption text-ink bg-canvas focus:outline-none focus:ring-2 focus:ring-primary-focus min-h-[36px] cursor-pointer';
@@ -1536,7 +1537,12 @@ export default function Home() {
             <span className="font-text text-fine-print text-body-muted hidden sm:inline">Check-In Dashboard</span>
           </header>
 
-          {/* Sub-nav + page title */}
+          {/* Sub-nav + page content — softened when setup modal is open */}
+          <div
+            className={`transition-[filter,opacity] duration-300 ${
+              showSetupModal ? 'blur-[2px] opacity-60 pointer-events-none select-none' : ''
+            }`}
+          >
           <div className="sub-nav-frosted mb-lg">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-md">
               <div className="flex-1 min-w-0">
@@ -1960,6 +1966,8 @@ export default function Home() {
                 )}
               </div>
             </>
+          ) : !userProfile ? (
+            <DashboardSkeleton />
           ) : null}
 
           {/* Checked-Out List - Only for Teacher View (Admin view already has it in the Check-Ins tab) */}
@@ -2014,6 +2022,7 @@ export default function Home() {
               </ul>
             </div>
           </footer> */}
+          </div>
           </div>
         </div>
       </main>
