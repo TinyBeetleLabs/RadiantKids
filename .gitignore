@@ -35,3 +35,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# local / internal docs (kept on disk, not published)
+docs/internal/
+
+# tooling
+.sfdx/
+.cursor/
